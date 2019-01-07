@@ -3,7 +3,7 @@ import os
 import sys
 
 try:
-    from setuptools import setup, find_packages
+    from setuptools import setup
 except ImportError:
     from distutils.core import setup
 
@@ -29,10 +29,7 @@ setup(
     author='Szymon Talaga',
     author_email='stalaga@protonmail.com',
     url='https://github.com/sztal/sdnet',
-    packages=[
-        *find_packages()
-        #'sdnet',
-    ],
+    packages=['sdnet'],
     setup_requires=['pytest-runner'],
     tests_require=[
         'pytest',

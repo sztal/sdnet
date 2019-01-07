@@ -2,7 +2,7 @@
 # pylint: disable=W0621
 import pytest
 import numpy as np
-from sdnet.models import SegregationProcess
+from sdnet.models import SegregationProcess, SegregationWithClustering
 from sdnet.networks import random_network
 
 
@@ -54,7 +54,7 @@ def sp_d2_uniform(d2_uniform):
     A, X = d2_uniform
     return SegregationProcess(A, X, directed=False)
 
-# @pytest.fixture(scope='function')
-# def spc_d1_uniform(d1_uniform):
-#     A, X = d1_uniform
-#     return SegregationWithClustering(A, X, directed=False)
+@pytest.fixture(scope='function')
+def spc_d2_uniform(d2_uniform):
+    A, X = d2_uniform
+    return SegregationWithClustering(A, X, directed=False)

@@ -1,5 +1,4 @@
 """Segregation driven models."""
-from random import sample
 import numpy as np
 from numpy.random import choice, uniform
 
@@ -16,7 +15,7 @@ class SegregationProcess:
     directed : bool
         Is the network directed.
     h : float
-        Avergae edge length (distance).
+        Average edge length (distance).
     n_nodes : int
         Number of nodes.
     n_edges : int
@@ -30,18 +29,19 @@ class SegregationProcess:
         self.A = A
         X = X - X.min(axis=0)
         self.X = X / X.max(axis=0)
-        self.edgeset = {
-            tuple(x): self.dist(self.X[x[0]], self.X[x[1]])
-            for x in np.argwhere(A)
-        }
+        self.E = np.argwhere(A)
+        self.V = np.zeros((self.E.shape[0],), dtype=float)
+        for k in range(self.E.shape[0]):
+            i, j = self.E[k]
+            self.V[k] = self.dist(self.X[i], self.X[j])
         self.directed = directed
-        self.hseries = [sum(self.edgeset.values()) / self.n_edges]
+        self.hseries = [self.V.mean()]
         self.nsteps = 0
         self._niter = 0
 
     @property
     def n_edges(self):
-        return len(self.edgeset)
+        return self.E.shape[0]
 
     @property
     def n_nodes(self):
@@ -57,44 +57,46 @@ class SegregationProcess:
 
     def remove_edge(self, i, j):
         """Remove an edge."""
-        del self.edgeset[(i, j)]
         self.A[i, j] = 0
-        if not self.directed and (j, i) in self.edgeset:
-            del self.edgeset[(j, i)]
+        if not self.directed:
             self.A[j, i] = 0
 
-    def add_edge(self, i, j):
+    def add_edge(self, k, l, i, j):
         """Add an edge."""
         d = self.dist(self.X[i, :], self.X[j, :])
-        self.edgeset[(i, j)] = d
         self.A[i, j] = 1
+        self.E[k, :] = i, j
+        self.V[k] = d
         if not self.directed:
-            self.edgeset[(j, i)] = d
             self.A[j, i] = 1
+            self.E[l, :] = j, i
+            self.V[l] = d
 
     def select_node(self, i):
         """Select a new adjacent node."""
-        choices = np.arange(self.n_nodes)[(self.A[i, :] == 0)]
+        choices = np.arange(self.n_nodes)[self.A[i, :] == 0]
         choices = choices[choices != i]
         return choice(choices)
 
     def rewire(self):
         """Do edge rewiring."""
-        i, j = sample(self.edgeset.keys(), 1).pop()
-        d = self.edgeset[(i, j)]
+        k = choice(self.E.shape[0])
+        i, j = self.E[k, :]
+        l = np.where((self.E[:, 0] == j) & (self.E[:, 1] == i))[0][0]
+        d = self.V[k]
         if uniform() <= d:
             self.remove_edge(i, j)
-            i = sample((i, j), 1).pop()
+            i = choice((i, j))
             j = self.select_node(i)
-            self.add_edge(i, j)
+            self.add_edge(k, l, i, j)
         self._niter += 1
         if self._niter % self.n_edges == 0:
             self.nsteps += 1
-            self.hseries.append(sum(self.edgeset.values()) / self.n_edges)
+            self.hseries.append(self.V.mean())
 
-    # def has_converged(self):
-    #     """Has the process converged."""
-    #     return False
+    def has_converged(self):
+        """Has the process converged."""
+        return False
 
     def run(self, n):
         """Run segregation process.
@@ -121,28 +123,34 @@ class SegregationWithClustering(SegregationProcess):
     from friends of friends. Moreover, selection probability
     is proportional to node degrees following the rule
     of preferential attachment.
-    """
-    def __init__(self, A, X, pa_exponent=1, directed=False):
-        """Initialization method.
 
-        pa_exponent : float
-            Exponent for the preferential attachment stage.
-        """
+    Attributes
+    ----------
+    pa_exponent : float
+        Exponent for the preferential attachment stage.
+    """
+    def __init__(self, A, X, directed=False, pa_exponent=3/4):
+        """Initialization method."""
         super().__init__(A, X, directed=directed)
         self.pa_exponent = pa_exponent
         self.A2 = A@A
+        self.D = A.sum(axis=1)
 
     def remove_edge(self, i, j):
         super().remove_edge(i, j)
         self.A2[i, :] -= self.A[j, :]
+        self.D[i] -= 1
         if not self.directed:
             self.A2[j, :] -= self.A[i, :]
+            self.D[j] -= 1
 
-    def add_edge(self, i, j):
-        super().add_edge(i, j)
+    def add_edge(self, k, l, i, j):
+        super().add_edge(k, l, i, j)
         self.A2[i, :] += self.A[j, :]
+        self.D[i] += 1
         if not self.directed:
             self.A2[j, :] += self.A[i, :]
+            self.D[j] += 1
 
     def select_node(self, i):
         nodes = self.A2[i, :] * np.where(self.A[i, :] == 0, 1, 0)

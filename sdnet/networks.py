@@ -1,6 +1,6 @@
 """Simple network models and related utilities."""
-from random import sample, uniform
 import numpy as np
+from numpy.random import uniform
 
 
 def random_network(N, p=None, k=None, directed=False):
@@ -37,13 +37,13 @@ def random_network(N, p=None, k=None, directed=False):
             raise ValueError(f"average degree of {k:.4} can not be attained with {N} nodes")
         p = k / (N-1)
     if directed:
-        X = np.where(np.random.random_sample((N, N)) <= p, 1, 0)
+        X = np.where(uniform(0, 1, (N, N)) <= p, 1, 0)
         np.fill_diagonal(X, 0)
     else:
         X = np.zeros((N, N), dtype=int)
         for i in range(N):
             for j in range(i):
-                if np.random.random_sample() <= p:
+                if uniform() <= p:
                     X[i, j] = X[j, i] = 1
     return X
 
@@ -93,7 +93,7 @@ def generate_adjacency_matrix(P, directed=False):
         Should network be directed.
     """
     if directed:
-        A = np.where(np.random.random_sample(P.shape) <= P, 1, 0)
+        A = np.where(uniform(0, 1, P.shape) <= P, 1, 0)
         A = A.astype(int)
         np.fill_diagonal(A, 0)
     else:
@@ -101,6 +101,6 @@ def generate_adjacency_matrix(P, directed=False):
         A = np.zeros_like(P, dtype=int)
         for i in range(N):
             for j in range(i):
-                if np.random.random_sample() <= P[i, j]:
+                if uniform() <= P[i, j]:
                     A[i, j] = A[j, i] = 1
     return A
