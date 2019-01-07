@@ -1,4 +1,5 @@
 """Segregation driven models."""
+from time import time
 import numpy as np
 from numpy.random import choice, uniform
 
@@ -36,7 +37,7 @@ class SegregationProcess:
             self.V[k] = self.dist(self.X[i], self.X[j])
         self.directed = directed
         self.hseries = [self.V.mean()]
-        self.nsteps = 0
+        self.n_steps = 0
         self._niter = 0
 
     @property
@@ -90,15 +91,18 @@ class SegregationProcess:
             j = self.select_node(i)
             self.add_edge(k, l, i, j)
         self._niter += 1
-        if self._niter % self.n_edges == 0:
-            self.nsteps += 1
-            self.hseries.append(self.V.mean())
+
+    def do_step(self):
+        for _ in range(self.n_edges):
+            self.rewire()
+        self.n_steps += 1
+        self.hseries.append(self.V.mean())
 
     def has_converged(self):
         """Has the process converged."""
         return False
 
-    def run(self, n):
+    def run(self, n, verbose=1):
         """Run segregation process.
 
         Parameters
@@ -110,9 +114,15 @@ class SegregationProcess:
             If ``None`` then stops when a condition
             defined in the :py:meth:`has_converged` is met.
         """
-        n0 = self.nsteps
-        while self.nsteps < n0 + n:
-            self.rewire()
+        for i in range(n):
+            start = time()
+            self.do_step()
+            end = time()
+            e = end - start
+            if verbose > 0:
+                print(f"Simulation step {i+1}/{n} finished in {e:.4} seconds ...\r", end="")
+        if verbose > 0:
+            print("\nReady.")
 
 
 class SegregationWithClustering(SegregationProcess):
@@ -129,7 +139,7 @@ class SegregationWithClustering(SegregationProcess):
     pa_exponent : float
         Exponent for the preferential attachment stage.
     """
-    def __init__(self, A, X, directed=False, pa_exponent=3/4):
+    def __init__(self, A, X, directed=False, pa_exponent=1):
         """Initialization method."""
         super().__init__(A, X, directed=directed)
         self.pa_exponent = pa_exponent
@@ -159,5 +169,5 @@ class SegregationWithClustering(SegregationProcess):
         if nodes.size == 0:
             return super().select_node(i)
         degrees = np.take(self.D, nodes)**self.pa_exponent
-        j = np.random.choice(nodes, 1, p=degrees / degrees.sum())[0]
+        j = choice(nodes, 1, p=degrees / degrees.sum())[0]
         return j
