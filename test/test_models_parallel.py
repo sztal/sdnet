@@ -24,4 +24,3 @@ def test_scp_parallel(n_jobs):
     results = Parallel(n_jobs=n_jobs)(delayed(run_job)(pa) for pa in EXPONENTS)
     end = time()
     elapsed = end - start
-    import pdb; pdb.set_trace()

@@ -52,15 +52,16 @@ def test_generate_adjacency_matrix(P, directed):
 @pytest.mark.filterwarnings("ignore:Using or importing the ABCs")
 class TestSegregationProcess:
 
-    @pytest.mark.parametrize('nsteps', [1, 2, 4])
-    def test_sp_d2_uniform(self, sp_d2_uniform, nsteps):
+    @pytest.mark.parametrize('n_steps', [1, 2, 4])
+    def test_sp_d2_uniform(self, sp_d2_uniform, n_steps):
         sp = sp_d2_uniform
         A = sp.A
         A0 = A.copy()
         h0 = sp.h
-        sp.run(nsteps)
+        sp.run(n_steps)
         assert A.sum() == A0.sum()
         assert A.shape == A0.shape
+        assert np.array_equal(A, A.T)
         assert not np.array_equal(sp.A.sum(axis=1), A0.sum(axis=1))
         assert not np.array_equal(A, A0)
         assert sp.h < h0
@@ -74,7 +75,8 @@ class TestSegregationProcess:
         sp.run(nsteps)
         assert A.sum() == A0.sum()
         assert A.shape == A0.shape
-        assert not np.array_equal(sp.D, A0.sum(axis=1))
+        assert np.array_equal(A, A.T)
+        assert not np.array_equal(A.sum(axis=1), A0.sum(axis=1))
         assert not np.array_equal(A, A0)
         assert sp.h < h0
         assert A.sum(axis=1).max() > A0.sum(axis=1).max()
