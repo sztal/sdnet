@@ -3,7 +3,8 @@
 import pytest
 import numpy as np
 from sdnet.models import SegregationProcess, SegregationWithClustering
-from sdnet.networks import random_network
+from sdnet.networks import random_network, stochastic_block_model_jit
+from sdnet.utils import norm_manhattan_dist
 
 
 def pytest_addoption(parser):
@@ -42,19 +43,31 @@ def pytest_collection_modifyitems(config, items):
 
 # Fixtures --------------------------------------------------------------------
 
+@pytest.fixture(scope='session')
+def data_matrix():
+    np.random.seed(999)
+    X = np.random.uniform(0, 1, (250, 2))
+    return X
+
+@pytest.fixture(scope='session')
+def prob_matrix(data_matrix):
+    X = data_matrix
+    return stochastic_block_model_jit(X, norm_manhattan_dist, symmetric=True)
+
 @pytest.fixture(scope='function')
 def d2_uniform():
     np.random.seed(999)
-    X = np.random.uniform(0, 1, (250, 2))
     A = random_network(250, k=10, directed=False)
-    return A, X
+    return A
 
 @pytest.fixture(scope='function')
-def sp_d2_uniform(d2_uniform):
-    A, X = d2_uniform
+def sp_d2_uniform(d2_uniform, data_matrix):
+    A = d2_uniform
+    X = data_matrix
     return SegregationProcess(A, X, directed=False)
 
 @pytest.fixture(scope='function')
-def spc_d2_uniform(d2_uniform):
-    A, X = d2_uniform
-    return SegregationWithClustering(A, X, directed=False)
+def spc_d2_uniform(d2_uniform, data_matrix, prob_matrix):
+    A = d2_uniform
+    X = data_matrix
+    return SegregationWithClustering(A, X, P=prob_matrix, directed=False)

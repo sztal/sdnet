@@ -3,6 +3,7 @@
 from time import time
 import numpy as np
 from numpy.random import choice, uniform
+from sdnet.utils import norm_manhattan_dist
 
 
 class SegregationProcess:
@@ -14,6 +15,8 @@ class SegregationProcess:
         Adjacency matrix.
     X : (N, k) array_like
         Nodes' features dataset.
+    P : (N, N) array_like
+        Precomputed distance matrix. Optional.
     homophily : float
         Hompohily value. Must be between 0 and 1.
     initial_diversity : float
@@ -38,31 +41,30 @@ class SegregationProcess:
     coverged : bool
         Convergence flag.
     """
-    def __init__(self, A, X, homophily=0.2, initial_diversity=None,
+    def __init__(self, A, X, P=None, homophily=0.2,
                  directed=False, steps_with_no_change=5):
         """Initialization method."""
         self.A = A
+        self.P = P
         X = X - X.min(axis=0)
         self.X = X / X.max(axis=0)
-        self.E = np.argwhere(A)
-        self.V = np.zeros((self.E.shape[0],), dtype=float)
-        for k in range(self.E.shape[0]):
-            i, j = self.E[k]
-            self.V[k] = self.dist(self.X[i], self.X[j])
-        h0 = self.V.mean()
-        self.homophily = homophily
-        if initial_diversity is not None:
-            self.initial_diversity = initial_diversity
-        else:
-            self.initial_diversity = h0
         self.directed = directed
+        self.E = self._get_edgelist(self.A)
+        if self.P is not None:
+            self.V = self.P[np.nonzero(self.A)]
+        else:
+            self.V = np.zeros((self.E.shape[0],), dtype=float)
+            for k in range(self.E.shape[0]):
+                i, j, _ = self.E[k]
+                self.V[k] = self.dist(self.X[i], self.X[j])
+        self.homophily = homophily
+        self.avg_cut_p = self.V.mean()
         self.steps_with_no_change = steps_with_no_change
-        self.hseries = [h0]
+        self.hseries = [self.avg_cut_p]
         self.n_steps = 0
+        self.n_iter = 0
         self.converged = False
-        self._niter = 0
-        self._unhappy = \
-            set(np.where(self.V >= self.threshold)[0])
+        self._th = (1 - self.homophily) * self.avg_cut_p
 
     @property
     def n_edges(self):
@@ -73,16 +75,34 @@ class SegregationProcess:
         return self.A.shape[0]
 
     @property
-    def threshold(self):
-        return (1 - self.homophily)*self.initial_diversity
+    def n_unhappy(self):
+        return self._get_unhappy().size
 
     @property
     def h(self):
         return self.hseries[-1]
 
+    def _get_edgelist(self, A):
+        E = np.argwhere(A)
+        E = E[E.sum(axis=1).argsort()]
+        sum_idx = E.sum(axis=1).reshape(E.shape[0], 1)
+        max_idx = E.max(axis=1).reshape(E.shape[0], 1)
+        E = np.hstack((E, max_idx, sum_idx))
+        E = E[np.argsort(E[:, -1])]
+        E = E[np.argsort(E[:, -2], kind='mergesort')]
+        if self.directed:
+            E[:, 2] = -1
+        else:
+            E[::2, 2] = np.arange(1, E.shape[0], 2)
+            E[1::2, 2] = np.arange(0, E.shape[0], 2)
+        return E[:, :3]
+
+    def _get_unhappy(self):
+        return np.where(self.V > self._th)[0]
+
     def dist(self, u, v):
         """Distance function."""
-        return np.abs(u - v).mean()
+        return norm_manhattan_dist(u, v)
 
     def remove_edge(self, i, j):
         """Remove an edge."""
@@ -90,16 +110,19 @@ class SegregationProcess:
         if not self.directed:
             self.A[j, i] = 0
 
-    def add_edge(self, k, l, i, j):
+    def add_edge(self, i, j, u, v):
         """Add an edge."""
-        d = self.dist(self.X[i, :], self.X[j, :])
+        if self.P is not None:
+            d = self.P[i, j]
+        else:
+            d = self.dist(self.X[i], self.X[j])
         self.A[i, j] = 1
-        self.E[k, :] = i, j
-        self.V[k] = d
+        self.E[u, :2] = i, j
+        self.V[u] = d
         if not self.directed:
             self.A[j, i] = 1
-            self.E[l, :] = j, i
-            self.V[l] = d
+            self.E[v, :2] = j, i
+            self.V[v] = d
 
     def select_node(self, i):
         """Select a new adjacent node."""
@@ -109,20 +132,19 @@ class SegregationProcess:
 
     def rewire(self):
         """Do edge rewiring."""
-        unhappy = np.where(self.V >= self.threshold)[0]
+        unhappy = self._get_unhappy()
         if unhappy.size == 0:
             self.converged = True
             return
-        k = choice(unhappy)
-        i, j = self.E[k, :]
-        l = np.where((self.E[:, 0] == j) & (self.E[:, 1] == i))[0][0]
-        d = self.V[k]
-        if uniform() <= d:
+        u = choice(unhappy)
+        i, j, v = self.E[u, :]
+        p = self.V[u]
+        if uniform() <= p:
             self.remove_edge(i, j)
             i = choice((i, j))
             j = self.select_node(i)
-            self.add_edge(k, l, i, j)
-        self._niter += 1
+            self.add_edge(i, j, u, v)
+        self.n_iter += 1
 
     def has_converged(self):
         """Has the process converged or get stuck."""
@@ -178,13 +200,15 @@ class SegregationWithClustering(SegregationProcess):
     ----------
     pa_exponent : float
         Exponent for the preferential attachment stage.
+    small_world_p : float
+        Probability of random rewiring instead of a preferential one.
     """
-    def __init__(self, A, X, homophily=0.2, initial_diversity=None,
-                 directed=False, pa_exponent=1):
+    def __init__(self, A, X, P=None, homophily=0.2, directed=False,
+                 pa_exponent=1, small_world_p=0.01):
         """Initialization method."""
-        super().__init__(A, X, homophily=homophily,
-                         initial_diversity=initial_diversity, directed=directed)
+        super().__init__(A, X, P=P, homophily=homophily, directed=directed)
         self.pa_exponent = pa_exponent
+        self.small_world_p = small_world_p
         self.A2 = A@A
 
     def remove_edge(self, i, j):
@@ -195,8 +219,8 @@ class SegregationWithClustering(SegregationProcess):
             self.A2[:, i] -= self.A[j, :]
         super().remove_edge(i, j)
 
-    def add_edge(self, k, l, i, j):
-        super().add_edge(k, l, i, j)
+    def add_edge(self, i, j, u, v):
+        super().add_edge(i, j, u, v)
         self.A2[i, :] += self.A[j, :]
         self.A2[:, j] += self.A[i, :]
         if not self.directed:
@@ -204,6 +228,8 @@ class SegregationWithClustering(SegregationProcess):
             self.A2[:, i] += self.A[j, :]
 
     def select_node(self, i):
+        if uniform() <= self.small_world_p:
+            return super().select_node(i)
         sep2 = self.A2[i, :] * np.where(self.A[i, :] == 0, 1, 0)
         sep2[i] = 0
         sep2_idx = np.nonzero(sep2)[0]
@@ -211,6 +237,6 @@ class SegregationWithClustering(SegregationProcess):
         if sep2_idx.size == 0:
             return super().select_node(i)
         sep2 = sep2**self.pa_exponent
-        weights = sep2 / sep2.sum()
-        j = choice(sep2_idx, 1, p=weights)[0]
+        weights = sep2
+        j = choice(sep2_idx, 1, p=weights / weights.sum())[0]
         return j

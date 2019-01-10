@@ -1,7 +1,16 @@
 """Simple network models and related utilities."""
 import numpy as np
-from numpy.random import uniform
+from numpy.random import random, uniform
+from numba import njit
 
+
+@njit
+def _rng_unidirected_nb(X, p):
+    for i in range(X.shape[0]):
+        for j in range(i):
+            if random() <= p:
+                X[i, j] = X[j, i] = 1
+    return X
 
 def random_network(N, p=None, k=None, directed=False):
     """Generate a random network.
@@ -41,14 +50,11 @@ def random_network(N, p=None, k=None, directed=False):
         np.fill_diagonal(X, 0)
     else:
         X = np.zeros((N, N), dtype=int)
-        for i in range(N):
-            for j in range(i):
-                if uniform() <= p:
-                    X[i, j] = X[j, i] = 1
+        X = _rng_unidirected_nb(X, p)
     return X
 
 
-def stochastic_block_model(X, measure, symmetric=False, **kwds):
+def stochastic_block_model(X, measure, symmetric=True):
     """Generate a network based on a generalized stochastic block model.
 
     Parameters
@@ -61,8 +67,6 @@ def stochastic_block_model(X, measure, symmetric=False, **kwds):
         feature vectors for two nodes.
     symmetric : bool
         Is the measure function symmetric in the two main arguments.
-    **kwds :
-        Keyword arguments passed to the measure function.
 
     Returns
     -------
@@ -74,13 +78,23 @@ def stochastic_block_model(X, measure, symmetric=False, **kwds):
     if symmetric:
         for i in range(N):
             for j in range(i):
-                P[i, j] = P[j, i] = measure(X[i], X[j], **kwds)
+                P[i, j] = P[j, i] = measure(X[i], X[j])
     else:
         for i in range(N):
             for j in range(N):
-                P[i, j] = measure(X[i], X[j], **kwds)
+                P[i, j] = measure(X[i], X[j])
     return P
 
+stochastic_block_model_jit = njit(stochastic_block_model)
+
+
+@njit
+def _gen_am_unidirected_nb(P, A):
+    for i in range(A.shape[0]):
+        for j in range(i):
+            if random() <= P[i, j]:
+                A[i, j] = A[j, i] = 1
+    return A
 
 def generate_adjacency_matrix(P, directed=False):
     """Generate adjacency matrix from edge formation probabilities.
@@ -97,10 +111,6 @@ def generate_adjacency_matrix(P, directed=False):
         A = A.astype(int)
         np.fill_diagonal(A, 0)
     else:
-        N = P.shape[0]
         A = np.zeros_like(P, dtype=int)
-        for i in range(N):
-            for j in range(i):
-                if uniform() <= P[i, j]:
-                    A[i, j] = A[j, i] = 1
+        A = _gen_am_unidirected_nb(P, A)
     return A
