@@ -5,7 +5,7 @@ from numba import njit
 
 
 @njit
-def _rng_unidirected_nb(X, p):
+def _rng_undirected_nb(X, p):
     for i in range(X.shape[0]):
         for j in range(i):
             if random() <= p:
@@ -50,12 +50,12 @@ def random_network(N, p=None, k=None, directed=False):
         np.fill_diagonal(X, 0)
     else:
         X = np.zeros((N, N), dtype=int)
-        X = _rng_unidirected_nb(X, p)
+        X = _rng_undirected_nb(X, p)
     return X
 
 
-def stochastic_block_model(X, measure, symmetric=True):
-    """Generate a network based on a generalized stochastic block model.
+def random_geometric_graph(X, measure, symmetric=True):
+    """Generate a random geometric graph.
 
     Parameters
     ----------
@@ -85,11 +85,11 @@ def stochastic_block_model(X, measure, symmetric=True):
                 P[i, j] = measure(X[i], X[j])
     return P
 
-stochastic_block_model_jit = njit(stochastic_block_model)
+random_geometric_graph_nb = njit(random_geometric_graph)
 
 
 @njit
-def _gen_am_unidirected_nb(P, A):
+def _gen_am_undirected_nb(P, A):
     for i in range(A.shape[0]):
         for j in range(i):
             if random() <= P[i, j]:
@@ -112,5 +112,5 @@ def generate_adjacency_matrix(P, directed=False):
         np.fill_diagonal(A, 0)
     else:
         A = np.zeros_like(P, dtype=int)
-        A = _gen_am_unidirected_nb(P, A)
+        A = _gen_am_undirected_nb(P, A)
     return A

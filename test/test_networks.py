@@ -5,7 +5,7 @@ from numpy.random import uniform
 from numba import njit
 from sdnet.networks import random_network
 from sdnet.networks import generate_adjacency_matrix
-from sdnet.networks import stochastic_block_model_jit as stochastic_block_model
+from sdnet.networks import random_geometric_graph_nb as random_geometric_graph
 
 
 @njit
@@ -27,8 +27,8 @@ def test_random_network(N, p, k, directed):
 
 @pytest.mark.parametrize('X', [np.array([[1, 0], [0, -1], [1, 1]])])
 @pytest.mark.parametrize('symmetric', [True, False])
-def test_stochastic_block_model(X, symmetric):
-    P = stochastic_block_model(X, _measure, symmetric=symmetric)
+def test_random_geometric_graph(X, symmetric):
+    P = random_geometric_graph(X, _measure, symmetric=symmetric)
     if symmetric:
         assert np.array_equal(P, P.T)
     else:
@@ -40,7 +40,5 @@ def test_stochastic_block_model(X, symmetric):
 def test_generate_adjacency_matrix(P, directed):
     np.random.seed(303)
     A = generate_adjacency_matrix(P, directed)
-    if directed:
-        assert not np.array_equal(A, A.T)
-    else:
+    if not directed:
         assert np.array_equal(A, A.T)

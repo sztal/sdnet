@@ -1,9 +1,5 @@
 """Simulation related functions and utilities."""
-import os
-from hashlib import md5
-import tempfile as tmp
 from itertools import repeat, chain
-import joblib
 from joblib import Parallel, delayed
 import numpy as np
 from numba import njit
@@ -13,10 +9,13 @@ from numba import njit
 def norm_manhattan_dist(u, v):
     return np.abs(u - v).mean()
 
+@njit
+def inverse_distance(u, v, alpha=1):
+    return 1 / np.sqrt(np.sum((u-v)**2))**(-alpha)
 
-def run_simulations(func, params, n=1, n_jobs=4, out_func=None,
-                    cachedir=None, use_persistence=True):
-    """Run simulation experiments.
+
+def run_simulations(func, params, n=1, n_jobs=4, out_func=None):
+    """Run in parallel.
 
     Parameters
     ----------
@@ -24,45 +23,37 @@ def run_simulations(func, params, n=1, n_jobs=4, out_func=None,
         Function that takes parameters as inputs.
     params : iterable
         Iterable of parameters' values.
-        They are passed to the `func` as ``kwargs``.
+        They are passed to the `func` as ``*args``.
     n : int
         How many repetition for every combination of parameters.
     n_jobs : int
         Number of parallel jobs to run.
     out_func : callable or None
         Optional function for processing output.
-    cachedir : str
-        Path to the cache directory.
-    use_persistence : bool
-        Should persistence be used.
-        Runs are identified by hashes of parameters.
     """
-    params = list(chain.from_iterable(repeat(params, n)))
-    key = ''.join(str(x) for x in params)
-    m = md5()
-    m.update(key.encode())
-    key = m.hexdigest()
-
-    if use_persistence:
-        cachedir = tmp.mkdtemp() if cachedir is None else cachedir
-        filepath = os.path.join(cachedir, key)
-
-    if use_persistence and os.path.exists(filepath):
-        results = joblib.load(filepath)
-    else:
-        results = Parallel(n_jobs=n_jobs)(delayed(func)(**kw) for kw in params)
-        if use_persistence:
-            if not os.path.exists(cachedir):
-                os.makedirs(cachedir, exist_ok=True)
-            joblib.dump(results, filepath)
-
+    pars = chain.from_iterable(repeat(params, n))
+    results = Parallel(n_jobs=n_jobs)(delayed(func)(*p) for p in pars)
     if out_func is not None:
         results = out_func(results)
     return results
 
+def get_sorted_dists(P):
+    """Get sorted distances from a distance matrix.
 
-def estimate_maximium_homophily(P, n_edges):
-    """Estimate maximum homophily for a dataset.
+    Parameters
+    ----------
+    P : (N, N) array_like
+        Distance matrix.
+    """
+    dists = np.hstack((
+        P[np.triu_indices_from(P, k=1)],
+        P[np.tril_indices_from(P, k=-1)]
+    ))
+    dists.sort()
+    return dists
+
+def get_distance_least_upper_bound(P, n_edges):
+    """Get least upper bound for distances in a dataset.
 
     Parameters
     ----------
@@ -71,12 +62,34 @@ def estimate_maximium_homophily(P, n_edges):
     n_edges : int
         Number of edges.
     """
-    avg_dist = P.mean()
-    dists = np.hstack((
-        P[np.triu_indices_from(P, k=1)],
-        P[np.tril_indices_from(P, k=-1)]
-    ))
-    dists.sort()
+    dists = get_sorted_dists(P)
     least_upper_dist = dists[n_edges].max()
-    homophily = least_upper_dist / avg_dist
-    return homophily
+    return least_upper_dist
+
+def get_walk2(A, i):
+    """Get length 2 walks for a given node in an adjacency matrix.
+
+    Parameters
+    ----------
+    A : (N, N) array_like
+        An adjacency matrix.
+    i : int
+        Index of a node.
+    """
+    return A[np.nonzero(A[i, :])].sum(axis=0)
+
+def normalize_minmax(X, copy=True):
+    """Min-Max normalize a data array.
+
+    Parameters
+    ----------
+    X : (N, k) array_like
+        A data array.
+    copy : bool
+        Shoul copy be created.
+    """
+    if copy:
+        X = X.copy()
+    X -= X.min(axis=0)
+    X /= X.max(axis=0)
+    return X
