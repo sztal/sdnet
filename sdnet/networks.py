@@ -5,7 +5,7 @@ from numba import njit
 
 
 @njit
-def _rng_undirected_nb(X, p):
+def _rn_undirected_nb(X, p):
     for i in range(X.shape[0]):
         for j in range(i):
             if random() <= p:
@@ -39,9 +39,9 @@ def random_network(N, p=None, k=None, directed=False):
     """
     if p is None and k is None:
         raise TypeError("Either 'p' or 'k' must be used")
-    elif p is not None and k is not None:
+    if p is not None and k is not None:
         raise TypeError("'p' and 'k' can not be used at the same time")
-    elif k is not None:
+    if k is not None:
         if k > N-1:
             raise ValueError(f"average degree of {k:.4} can not be attained with {N} nodes")
         p = k / (N-1)
@@ -50,12 +50,12 @@ def random_network(N, p=None, k=None, directed=False):
         np.fill_diagonal(X, 0)
     else:
         X = np.zeros((N, N), dtype=int)
-        X = _rng_undirected_nb(X, p)
+        X = _rn_undirected_nb(X, p)
     return X
 
 
-def random_geometric_graph(X, measure, symmetric=True):
-    """Generate a random geometric graph.
+def distance_matrix(X, measure, symmetric=True):
+    """Generate a distance matrix.
 
     Parameters
     ----------
@@ -85,18 +85,18 @@ def random_geometric_graph(X, measure, symmetric=True):
                 P[i, j] = measure(X[i], X[j])
     return P
 
-random_geometric_graph_nb = njit(random_geometric_graph)
+distance_matrix_nb = njit(distance_matrix)
 
 
 @njit
-def _gen_am_undirected_nb(P, A):
+def _am_undirected_nb(P, A):
     for i in range(A.shape[0]):
         for j in range(i):
             if random() <= P[i, j]:
                 A[i, j] = A[j, i] = 1
     return A
 
-def generate_adjacency_matrix(P, directed=False):
+def adjacency_matrix(P, directed=False):
     """Generate adjacency matrix from edge formation probabilities.
 
     Parameters
@@ -112,5 +112,5 @@ def generate_adjacency_matrix(P, directed=False):
         np.fill_diagonal(A, 0)
     else:
         A = np.zeros_like(P, dtype=int)
-        A = _gen_am_undirected_nb(P, A)
+        A = _am_undirected_nb(P, A)
     return A

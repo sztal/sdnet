@@ -9,10 +9,6 @@ from numba import njit
 def norm_manhattan_dist(u, v):
     return np.abs(u - v).mean()
 
-@njit
-def inverse_distance(u, v, alpha=1):
-    return 1 / np.sqrt(np.sum((u-v)**2))**(-alpha)
-
 
 def run_simulations(func, params, n=1, n_jobs=4, out_func=None):
     """Run in parallel.
@@ -37,21 +33,6 @@ def run_simulations(func, params, n=1, n_jobs=4, out_func=None):
         results = out_func(results)
     return results
 
-def get_sorted_dists(P):
-    """Get sorted distances from a distance matrix.
-
-    Parameters
-    ----------
-    P : (N, N) array_like
-        Distance matrix.
-    """
-    dists = np.hstack((
-        P[np.triu_indices_from(P, k=1)],
-        P[np.tril_indices_from(P, k=-1)]
-    ))
-    dists.sort()
-    return dists
-
 def get_distance_least_upper_bound(P, n_edges):
     """Get least upper bound for distances in a dataset.
 
@@ -62,8 +43,12 @@ def get_distance_least_upper_bound(P, n_edges):
     n_edges : int
         Number of edges.
     """
-    dists = get_sorted_dists(P)
-    least_upper_dist = dists[n_edges].max()
+    dists = np.hstack((
+        P[np.triu_indices_from(P, k=1)],
+        P[np.tril_indices_from(P, k=-1)]
+    ))
+    dists.sort()
+    least_upper_dist = dists[n_edges - 1]
     return least_upper_dist
 
 def get_walk2(A, i):
@@ -77,19 +62,3 @@ def get_walk2(A, i):
         Index of a node.
     """
     return A[np.nonzero(A[i, :])].sum(axis=0)
-
-def normalize_minmax(X, copy=True):
-    """Min-Max normalize a data array.
-
-    Parameters
-    ----------
-    X : (N, k) array_like
-        A data array.
-    copy : bool
-        Shoul copy be created.
-    """
-    if copy:
-        X = X.copy()
-    X -= X.min(axis=0)
-    X /= X.max(axis=0)
-    return X

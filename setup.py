@@ -35,11 +35,8 @@ setup(
         'pytest',
         'pylint',
         'pytest-pylint',
-        'pytest-profiling',
-        'pytest-benchmark',
         'pytest-doctestplus',
         'coverage',
-        'networkx'
     ],
     test_suite='tests',
     package_dir={'sdnet': 'sdnet'},

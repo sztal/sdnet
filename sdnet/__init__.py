@@ -1,4 +1,4 @@
-from sdnet.models import Segregation, SegregationClustering
+from sdnet.models import SESNetwork
 
 __author__ = 'Szymon Talaga'
 __email__ = 'stalaga@protonmail.com'

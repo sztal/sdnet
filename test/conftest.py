@@ -2,8 +2,7 @@
 # pylint: disable=W0621
 import pytest
 import numpy as np
-from sdnet.models import Segregation, SegregationClustering
-from sdnet.networks import random_network, random_geometric_graph_nb
+from sdnet.networks import random_network, distance_matrix_nb
 from sdnet.utils import norm_manhattan_dist
 
 
@@ -46,30 +45,18 @@ def pytest_collection_modifyitems(config, items):
 N_NODES = 250
 
 @pytest.fixture(scope='session')
-def data_matrix():
+def d2_uniform():
     np.random.seed(999)
     X = np.random.uniform(0, 1, (N_NODES, 2))
     return X
 
 @pytest.fixture(scope='session')
-def prob_matrix(data_matrix):
-    X = data_matrix
-    return random_geometric_graph_nb(X, norm_manhattan_dist, symmetric=True)
+def dist_matrix(d2_uniform):
+    X = d2_uniform
+    return distance_matrix_nb(X, norm_manhattan_dist, symmetric=True)
 
 @pytest.fixture(scope='function')
-def d2_uniform():
+def adj_matrix():
     np.random.seed(999)
-    A = random_network(N_NODES, k=10, directed=False)
+    A = random_network(N_NODES, k=15, directed=False)
     return A
-
-@pytest.fixture(scope='function')
-def sp_d2_uniform(d2_uniform, prob_matrix):
-    A = d2_uniform
-    P = prob_matrix
-    return Segregation(A, P, directed=False)
-
-@pytest.fixture(scope='function')
-def spc_d2_uniform(d2_uniform, prob_matrix):
-    A = d2_uniform
-    P = prob_matrix
-    return SegregationClustering(A, P, directed=False)

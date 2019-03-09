@@ -4,8 +4,7 @@ import numpy as np
 from numpy.random import uniform
 from numba import njit
 from sdnet.networks import random_network
-from sdnet.networks import generate_adjacency_matrix
-from sdnet.networks import random_geometric_graph_nb as random_geometric_graph
+from sdnet.networks import adjacency_matrix, distance_matrix_nb
 
 
 @njit
@@ -27,8 +26,8 @@ def test_random_network(N, p, k, directed):
 
 @pytest.mark.parametrize('X', [np.array([[1, 0], [0, -1], [1, 1]])])
 @pytest.mark.parametrize('symmetric', [True, False])
-def test_random_geometric_graph(X, symmetric):
-    P = random_geometric_graph(X, _measure, symmetric=symmetric)
+def test_distance_matrix(X, symmetric):
+    P = distance_matrix_nb(X, _measure, symmetric=symmetric)
     if symmetric:
         assert np.array_equal(P, P.T)
     else:
@@ -37,8 +36,8 @@ def test_random_geometric_graph(X, symmetric):
 
 @pytest.mark.parametrize('P', [uniform(0, 1, (250, 250))])
 @pytest.mark.parametrize('directed', [True, False])
-def test_generate_adjacency_matrix(P, directed):
+def test_adjacency_matrix(P, directed):
     np.random.seed(303)
-    A = generate_adjacency_matrix(P, directed)
+    A = adjacency_matrix(P, directed)
     if not directed:
         assert np.array_equal(A, A.T)

@@ -2,6 +2,7 @@
 import pytest
 import numpy as np
 from sdnet.utils import run_simulations, get_walk2
+from sdnet.utils import get_distance_least_upper_bound
 
 
 def _func(N, lo, hi):
@@ -21,3 +22,13 @@ def test_get_walk2():
     A2 = A@A
     for i in range(N):
         assert np.array_equal(get_walk2(A, i), A2[i, :])
+
+@pytest.mark.parametrize('n_edges,expected', [(2, 2), (4, 4)])
+def test_get_distance_least_upper_bound(n_edges, expected):
+    X = np.array([
+        [0, 1, 2],
+        [3, 0, 4],
+        [5, 6, 0]
+    ])
+    output = get_distance_least_upper_bound(X, n_edges)
+    assert output == expected
