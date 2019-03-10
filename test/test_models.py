@@ -1,6 +1,7 @@
 """Tests for `sdnet` module."""
 # pylint: disable=E0611
 # pylint: disable=R0914
+from collections import OrderedDict
 import pytest
 import numpy as np
 from sdnet import SESNetwork
@@ -36,3 +37,4 @@ class TestSegregation:
         assert sp.E.shape[0] == A.sum()
         assert (sp.K >= 0).all()
         assert sp.homogeneity < h0
+        assert isinstance(sp.to_dict(), OrderedDict)

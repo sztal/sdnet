@@ -1,9 +1,11 @@
 """Segregation driven models."""
 # pylint: disable=R0902
+from collections import OrderedDict
 from time import time
 from random import randint, uniform, choice as _choice
 import numpy as np
 from numpy.random import choice
+from scipy.sparse import csr_matrix
 from sdnet.utils import get_walk2, get_distance_least_upper_bound
 
 
@@ -35,27 +37,33 @@ class SESNetwork:
         Probability of flow network evolution mode instead of rewiring evolution.
     directed : bool
         Is the network directed.
-    converged : bool
-        Convergence flag.
-    runtime : float
-        Running time of the process.
     threshold : float
         Convergence threshold on average distance.
-    converged : bool
-        Convergence flag.
-    check_convergence : bool
-        Should process stop after reaching convergence criterion.
-        If not, then it runs for a predetermined number of steps.
     alpha : float
         Homophily process exponent.
         In most cases it can be left with the default value,
         since it is automatically adjusted to ensure convergence
         in a reasonable time.
-    adjust_alpha : int
+    alpha0 : float
+        Initial value of alpha.
+    alpha_adjustment_steps : int
         Number of simulation steps after which alpha is increased to prevent
         very slow convergence. No adjustement if non-positive.
+    alpha_adjustment_increment : int
+        Increment size for adjusting `alpha`.
     alpha_adjusted : bool
         Indicates if `alpha` was adjusted during the runtime.
+    converged : bool
+        Convergence flag.
+    check_convergence : bool
+        Should process stop after reaching convergence criterion.
+        If not, then it runs for a predetermined number of steps.
+    n_steps : int
+        Number of Monte Carlo steps.
+    n_iter : int
+        Number of rewirings.
+    runtime : float
+        Running time of the process.
     """
     def __init__(self, A, D, h=0.4, pa_exp=0, p_local=0, p_flow=0,
                  directed=False, check_convergence=True, alpha=2,
@@ -75,16 +83,15 @@ class SESNetwork:
         self.dist_mean = self.init_dist_mean
         self.dist_lub = get_distance_least_upper_bound(self.D, self.n_edges)
         self.hseries = [self.init_dist_mean]
-        self.n_steps = 0
-        self.n_iter = 0
-        self.runtime = None
-        self.threshold = (1-self.h)*(self.init_dist_mean-self.dist_lub) + self.dist_lub
         self.converged = False
         self.check_convergence = check_convergence
         self.alpha_adjustement_steps = alpha_adjustment_steps
         self.alpha_adjustement_increment = alpha_adjustement_increment
         self.alpha_adjusted = False
         self.alpha0 = self.alpha
+        self.n_steps = 0
+        self.n_iter = 0
+        self.runtime = None
 
     def __repr__(self):
         cn = self.__class__.__name__
@@ -110,6 +117,10 @@ class SESNetwork:
     @property
     def homogeneity(self):
         return self.hseries[-1]
+
+    @property
+    def threshold(self):
+        return (1-self.h)*(self.init_dist_mean-self.dist_lub) + self.dist_lub
 
     def _get_edgelist(self, A):
         E = np.argwhere(A)
@@ -290,3 +301,35 @@ class SESNetwork:
         if verbose > 0:
             print("\nReady.")
         self.runtime = time() - start
+
+    def to_dict(self, use_sparse_matrix=True):
+        """Dump to (orderd) dictionary.
+
+        Parameters
+        ----------
+        use_sparse_matrix : bool
+            Should sparse (CSR) adjacency matrix be used.
+        """
+        return OrderedDict([
+            ('N', self.n_nodes),
+            ('n_edges', self.n_edges),
+            ('A', csr_matrix(self.A) if use_sparse_matrix else self.A),
+            ('h', self.h),
+            ('pa_exp', self.pa_exp),
+            ('p_local', self.p_local),
+            ('p_flow', self.p_flow),
+            ('directed', self.directed),
+            ('h0', self.hseries[0]),
+            ('h1', self.hseries[-1]),
+            ('threshold', self.threshold),
+            ('converged', self.converged),
+            ('check_convergence', self.check_convergence),
+            ('alpha', self.alpha),
+            ('alpha0', self.alpha0),
+            ('alpha_adjustment_steps', self.alpha_adjustement_steps),
+            ('alpha_adjustment_increment', self.alpha_adjustement_increment),
+            ('alpha_adjusted', self.alpha_adjusted),
+            ('n_iter', self.n_iter),
+            ('n_steps', self.n_steps),
+            ('runtime', self.runtime)
+        ])

@@ -42,7 +42,8 @@ setup(
     package_dir={'sdnet': 'sdnet'},
     include_package_data=True,
     install_requires=[
-        'numpy>=1.15.4'
+        'numpy>=1.15.4',
+        'scipy>=1.2.1'
     ],
     license='MIT',
     zip_safe=False,
