@@ -1,4 +1,5 @@
 """Simple network models and related utilities."""
+from random import uniform as _uniform, choice as _choice
 import numpy as np
 from numpy.random import random, uniform
 from numba import njit
@@ -53,41 +54,6 @@ def random_network(N, p=None, k=None, directed=False):
         X = _rn_undirected_nb(X, p)
     return X
 
-
-def distance_matrix(X, measure, symmetric=True):
-    """Generate a distance matrix.
-
-    Parameters
-    ----------
-    X : array_like (N, k)
-        Dataset with nodes' features.
-        One row is one node.
-    measure : callable
-        Measure function that takes two main arguments which are
-        feature vectors for two nodes.
-    symmetric : bool
-        Is the measure function symmetric in the two main arguments.
-
-    Returns
-    -------
-    (N, N) array_like
-        Edge formation probability matrix.
-    """
-    N = X.shape[0]
-    P = np.zeros((N, N))
-    if symmetric:
-        for i in range(N):
-            for j in range(i):
-                P[i, j] = P[j, i] = measure(X[i], X[j])
-    else:
-        for i in range(N):
-            for j in range(N):
-                P[i, j] = measure(X[i], X[j])
-    return P
-
-distance_matrix_nb = njit(distance_matrix)
-
-
 @njit
 def _am_undirected_nb(P, A):
     for i in range(A.shape[0]):
@@ -96,7 +62,7 @@ def _am_undirected_nb(P, A):
                 A[i, j] = A[j, i] = 1
     return A
 
-def adjacency_matrix(P, directed=False):
+def make_adjacency_matrix(P, directed=False):
     """Generate adjacency matrix from edge formation probabilities.
 
     Parameters
@@ -106,6 +72,7 @@ def adjacency_matrix(P, directed=False):
     directed : bool
         Should network be directed.
     """
+    # pylint: disable=no-member
     if directed:
         A = np.where(uniform(0, 1, P.shape) <= P, 1, 0)
         A = A.astype(int)
@@ -113,4 +80,68 @@ def adjacency_matrix(P, directed=False):
     else:
         A = np.zeros_like(P, dtype=int)
         A = _am_undirected_nb(P, A)
+    return A
+
+def get_edgelist(A, directed=False):
+    """Get ordered edgelist from an adjacency matrix.
+
+    Parameters
+    ----------
+    A : (N, N) array_like
+        An adjacency matrix.
+    directed : bool
+        Is the graph directed.
+    """
+    E = np.argwhere(A)
+    E = E[E.sum(axis=1).argsort()]
+    sum_idx = E.sum(axis=1)
+    max_idx = E.max(axis=1)
+    max1c_idx = (E[:, 0] > E[:, 1])
+    E = E[np.lexsort((max1c_idx, sum_idx, max_idx))]
+    if directed:
+        dual = np.full((E.shape[0], 1), -1)
+    else:
+        dual = np.arange(E.shape[0])
+        dual[::2] += 1
+        dual[1::2] -= 1
+        dual = dual.reshape(E.shape[0], 1)
+    E = np.hstack((E, dual))
+    return E
+
+def rewire_edges(A, p=0.01, directed=False, copy=False):
+    """Randomly rewire edges in an adjacency matrix with given probability.
+
+    Parameters
+    ----------
+    A : (N, N) array_like
+        An adjacency matrix.
+    p : float
+        Rewiring probability.
+    directed : bool
+        Is the graph directed.
+    copy : bool
+        Should copy of the adjacency array be returned.
+    """
+    if copy:
+        A = A.copy()
+    E = get_edgelist(A, directed=directed)
+    loop = range(0, E.shape[0]) if directed else range(0, E.shape[0], 2)
+    for u in loop:
+        rand = _uniform(0, 1)
+        if rand <= p:
+            i, j = E[u, :2]
+            if not directed and rand <= p/2:
+                new_i = j
+            else:
+                new_i = i
+            idx = np.nonzero(np.where(A[new_i, :] == 0, 1, 0))[0]
+            idx = idx[idx != new_i]
+            if idx.size == 0:
+                continue
+            new_j = _choice(idx)
+            A[i, j] = 0
+            A[new_i, new_j] = 1
+            if not directed:
+                A[j, i] = 0
+                A[new_j, new_i] = 1
     return A

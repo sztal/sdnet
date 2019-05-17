@@ -1,4 +1,4 @@
-from sdnet.models import SESNetwork
+from sdnet.sda import SDA
 
 __author__ = 'Szymon Talaga'
 __email__ = 'stalaga@protonmail.com'
